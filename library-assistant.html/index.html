@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>المساعد الذكي للمكتبات</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+body{font-family:'Segoe UI',Tahoma,Verdana,sans-serif;background:#f3f4f6}
+.loader{border:4px solid #f3f3f3;border-top:4px solid #2563eb;border-radius:50%;width:30px;height:30px;animation:spin 1s linear infinite;margin:12px auto 0;display:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+.nav{display:block;padding:12px 24px;cursor:pointer}
+.nav:hover{background:#1e40af}
+.nav.active{background:#1e3a8a;border-right:4px solid #60a5fa}
+.view{display:none}.view.show{display:block}
+#toast{position:fixed;bottom:20px;left:20px;background:#111827;color:#fff;padding:10px 16px;border-radius:8px;display:none;z-index:50}
+@media print{body *{visibility:hidden}#printArea,#printArea *{visibility:visible}#printArea{position:absolute;left:0;top:0;width:100%}.no-print{display:none!important}}
+</style>
+</head>
+<body class="text-gray-800">
+
+<div id="toast"></div>
+
+<!-- تسجيل الدخول -->
+<div id="loginPortal" class="min-h-screen flex items-center justify-center">
+  <form id="loginForm" class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md border-t-4 border-blue-600">
+    <div class="text-center mb-6">
+      <i class="fa-solid fa-book-atlas text-6xl text-blue-600 mb-3"></i>
+      <h2 class="text-2xl font-bold">تسجيل الدخول للنظام</h2>
+      <p class="text-sm text-gray-500 mt-1">المساعد الذكي للعمليات الفنية في المكتبات</p>
+    </div>
+    <label class="block text-sm font-semibold mb-1">اسم المستخدم</label>
+    <input id="username" class="w-full border rounded-lg p-3 mb-4 outline-none focus:ring-2 focus:ring-blue-500" required autocomplete="username">
+    <label class="block text-sm font-semibold mb-1">كلمة المرور</label>
+    <input id="password" type="password" class="w-full border rounded-lg p-3 mb-6 outline-none focus:ring-2 focus:ring-blue-500" required autocomplete="current-password">
+    <button class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow">دخول</button>
+    <p id="loginError" class="text-red-500 text-sm mt-3 text-center font-semibold" style="display:none">بيانات الدخول غير صحيحة!</p>
+  </form>
+</div>
+
+<!-- التطبيق -->
+<div id="app" class="h-screen bg-gray-50" style="display:none">
+ <div class="flex h-full">
+  <aside class="w-64 bg-blue-900 text-white flex-col shadow-xl z-20 hidden md:flex no-print">
+    <div class="p-6 flex items-center gap-3 border-b border-blue-800">
+      <i class="fa-solid fa-robot text-3xl text-blue-300"></i><h1 class="text-xl font-bold">المساعد الذكي</h1>
+    </div>
+    <nav class="flex-1 py-4">
+      <a class="nav active" data-view="process"><i class="fa-solid fa-house ml-2 w-5"></i> المعالجة الفنية</a>
+      <a class="nav" data-view="history"><i class="fa-solid fa-clock-rotate-left ml-2 w-5"></i> سجل العمليات</a>
+      <a class="nav" data-view="stats"><i class="fa-solid fa-chart-pie ml-2 w-5"></i> الإحصائيات</a>
+      <a class="nav" data-view="settings"><i class="fa-solid fa-gear ml-2 w-5"></i> الإعدادات</a>
+    </nav>
+    <div class="p-4 bg-blue-950 text-xs text-center text-blue-300"><p>إعداد الباحثة: نورهان</p></div>
+  </aside>
+
+  <main class="flex-1 flex flex-col overflow-hidden">
+    <header class="bg-white shadow-sm p-4 flex justify-between items-center border-b no-print">
+      <div class="flex items-center gap-2">
+        <select id="mobileNav" class="md:hidden border rounded p-1 text-sm">
+          <option value="process">المعالجة</option><option value="history">السجل</option><option value="stats">الإحصائيات</option><option value="settings">الإعدادات</option>
+        </select>
+        <h2 id="viewTitle" class="text-lg font-semibold"></h2>
+      </div>
+      <button id="logoutBtn" class="text-red-500 hover:text-red-700 text-sm font-bold"><i class="fa-solid fa-power-off"></i> خروج</button>
+    </header>
+
+    <div class="flex-1 overflow-y-auto p-6">
+
+      <!-- المعالجة -->
+      <section id="v-process" class="view show">
+        <div class="bg-white p-6 rounded-xl shadow-sm border mb-6">
+          <div class="mb-5 p-4 border-2 border-dashed rounded-lg bg-gray-50 text-center hover:bg-gray-100 cursor-pointer" id="dropZone">
+            <i class="fa-solid fa-file-pdf text-3xl text-red-400 mb-2"></i>
+            <p class="text-sm text-gray-600 font-medium">اضغطي أو اسحبي ملف PDF للوعاء هنا (اختياري - حتى 10 ميجابايت)</p>
+            <input id="pdfUpload" type="file" accept=".pdf" class="hidden">
+            <p id="fileName" class="text-green-600 text-xs mt-2 font-bold" style="display:none"></p>
+          </div>
+          <div class="grid md:grid-cols-2 gap-4 mb-4">
+            <div><label class="block text-sm font-bold mb-1">عنوان الوعاء <span class="text-red-500">*</span></label><input id="bookTitle" class="w-full border rounded p-2 bg-gray-50"></div>
+            <div><label class="block text-sm font-bold mb-1">المؤلف / بيان المسؤولية</label><input id="bookAuthor" class="w-full border rounded p-2 bg-gray-50"></div>
+            <div><label class="block text-sm font-bold mb-1">الناشر</label><input id="bookPublisher" class="w-full border rounded p-2 bg-gray-50"></div>
+            <div class="grid grid-cols-3 gap-2">
+              <div><label class="block text-sm font-bold mb-1">سنة النشر</label><input id="bookYear" class="w-full border rounded p-2 bg-gray-50"></div>
+              <div><label class="block text-sm font-bold mb-1">الصفحات</label><input id="bookPages" class="w-full border rounded p-2 bg-gray-50"></div>
+              <div><label class="block text-sm font-bold mb-1">ISBN</label><input id="bookIsbn" class="w-full border rounded p-2 bg-gray-50"></div>
+            </div>
+          </div>
+          <label class="block text-sm font-bold mb-1">المستخلص أو المقدمة (لرفع دقة التحليل الموضوعي)</label>
+          <textarea id="bookSummary" rows="3" class="w-full border rounded p-2 bg-gray-50 mb-5" placeholder="انسخي جزءًا من المقدمة أو الفهرس هنا..."></textarea>
+          <div class="mb-5"><p class="text-sm font-bold mb-2">العمليات الإضافية المطلوبة (الفهرسة والتصنيف تُنفَّذ دائمًا):</p>
+            <div id="ops" class="flex flex-wrap gap-5 text-sm">
+              <label class="flex items-center gap-1"><input type="checkbox" value="index" checked> التكشيف</label>
+              <label class="flex items-center gap-1"><input type="checkbox" value="abstract" checked> الاستخلاص</label>
+              <label class="flex items-center gap-1"><input type="checkbox" value="authority" checked> الضبط الاستنادي</label>
+            </div></div>
+          <button id="processBtn" class="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-bold py-3 rounded-lg shadow flex justify-center items-center gap-2">
+            <i class="fa-solid fa-microchip text-xl"></i><span>البدء في المعالجة الآلية للعمليات المحددة</span>
+          </button>
+          <div id="loading" class="loader"></div>
+        </div>
+
+        <div id="resultsArea" style="display:none">
+          <h3 class="text-lg font-bold text-blue-800 mb-3 border-b-2 border-blue-200 pb-2"><i class="fa-solid fa-check-circle text-green-500"></i> مخرجات الذكاء الاصطناعي</h3>
+          <div id="printArea" class="grid lg:grid-cols-2 gap-6">
+            <div class="bg-white p-5 rounded-xl border shadow-sm">
+              <div class="flex justify-between items-center mb-3 no-print">
+                <h4 class="font-bold"><i class="fa-solid fa-tags text-blue-500"></i> الفهرسة الوصفية</h4>
+                <div class="flex gap-2">
+                  <button id="copyBtn" class="text-xs bg-gray-100 hover:bg-gray-200 py-1 px-2 rounded border"><i class="fa-regular fa-copy"></i> نسخ</button>
+                  <button id="printBtn" class="text-xs bg-gray-100 hover:bg-gray-200 py-1 px-2 rounded border"><i class="fa-solid fa-print"></i> طباعة</button>
+                </div>
+              </div>
+              <div id="catalogResult" class="font-mono text-sm bg-yellow-50 p-4 border border-yellow-200 rounded whitespace-pre-wrap leading-relaxed min-h-[150px]"></div>
+            </div>
+            <div class="bg-white p-5 rounded-xl border shadow-sm">
+              <h4 class="font-bold mb-4"><i class="fa-solid fa-sitemap text-blue-500"></i> التصنيف والتحليل الموضوعي</h4>
+              <div class="bg-blue-50 p-3 rounded border border-blue-100 mb-2 flex items-center justify-between">
+                <span class="font-bold text-blue-900">رقم تصنيف ديوي (DDC):</span>
+                <span id="deweyResult" class="text-xl font-bold font-mono text-white bg-blue-700 px-3 py-1 rounded"></span>
+              </div>
+              <p id="deweyClass" class="text-xs text-gray-500 mb-1"></p>
+              <p id="deweyWarn" class="text-xs text-amber-600 font-semibold mb-3" style="display:none">⚠ الرقم بصيغة غير معتادة، راجعيه يدويًا.</p>
+              <div class="bg-gray-50 p-3 rounded border">
+                <span class="font-bold text-gray-700 mb-2 block">رؤوس الموضوعات:</span>
+                <div id="subjectsResult" class="flex flex-wrap gap-2"></div>
+              </div>
+              <p class="text-xs text-gray-400 mt-4 no-print">المخرجات مولّدة آليًا، وتحتاج مراجعة الأخصائي قبل الاعتماد.</p>
+            </div>
+            <div id="cardAbstract" class="bg-white p-5 rounded-xl border shadow-sm lg:col-span-2" style="display:none"><h4 class="font-bold mb-2"><i class="fa-solid fa-align-right text-blue-500"></i> الاستخلاص <span id="abstractType" class="text-xs text-gray-500 font-normal"></span></h4><p id="abstractResult" class="text-sm leading-loose whitespace-pre-wrap"></p></div>
+            <div id="cardIndex" class="bg-white p-5 rounded-xl border shadow-sm" style="display:none"><h4 class="font-bold mb-2"><i class="fa-solid fa-list-ol text-blue-500"></i> التكشيف (الكشاف)</h4><ul id="indexResult" class="text-sm space-y-1"></ul></div>
+            <div id="cardAuthority" class="bg-white p-5 rounded-xl border shadow-sm" style="display:none"><h4 class="font-bold mb-2"><i class="fa-solid fa-user-check text-blue-500"></i> الضبط الاستنادي</h4><div id="authorityResult" class="text-sm space-y-3"></div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- السجل -->
+      <section id="v-history" class="view">
+        <div class="bg-white p-5 rounded-xl border shadow-sm">
+          <p id="storeWarn" class="text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 text-sm mb-3" style="display:none">⚠ المتصفح يمنع حفظ السجل (وضع خاص أو صفحة مضمّنة)، فسيُفقد عند الإغلاق. صدّري CSV أو انشري التطبيق عبر Google Apps Script.</p>
+          <div class="flex flex-wrap gap-3 justify-between mb-3">
+            <input id="histSearch" name="hist_q" autocomplete="off" placeholder="بحث بالعنوان أو المؤلف أو الرقم..." class="border rounded p-2 text-sm w-full md:w-72">
+            <button id="exportBtn" class="text-sm bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded"><i class="fa-solid fa-file-csv"></i> تصدير CSV</button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="min-w-full text-sm text-right">
+              <thead class="bg-gray-100 text-gray-600"><tr>
+                <th class="py-2 px-3">العنوان</th><th class="py-2 px-3">التصنيف</th><th class="py-2 px-3">المؤلف</th><th class="py-2 px-3">التاريخ</th><th class="py-2 px-3"></th>
+              </tr></thead>
+              <tbody id="histBody"></tbody>
+            </table>
+          </div>
+          <p id="histEmpty" class="text-center text-gray-400 py-6">لا توجد عمليات محفوظة بعد. (تُسجَّل العملية بعد نجاح رد الذكاء الاصطناعي فقط.)</p>
+        </div>
+      </section>
+
+      <!-- الإحصائيات -->
+      <section id="v-stats" class="view">
+        <div class="grid md:grid-cols-3 gap-4 mb-6">
+          <div class="bg-white p-5 rounded-xl border text-center"><p class="text-gray-500 text-sm">إجمالي الأوعية المعالجة</p><p id="stTotal" class="text-3xl font-bold text-blue-700">0</p></div>
+          <div class="bg-white p-5 rounded-xl border text-center"><p class="text-gray-500 text-sm">معالج اليوم</p><p id="stToday" class="text-3xl font-bold text-green-600">0</p></div>
+          <div class="bg-white p-5 rounded-xl border text-center"><p class="text-gray-500 text-sm">أكثر فئة رئيسية</p><p id="stTop" class="text-lg font-bold text-purple-700 mt-2">-</p></div>
+        </div>
+        <div class="bg-white p-5 rounded-xl border">
+          <h3 class="font-bold mb-4">التوزيع حسب الفئات الرئيسية لديوي</h3>
+          <div id="stBars" class="space-y-2"></div>
+        </div>
+      </section>
+
+      <!-- الإعدادات -->
+      <section id="v-settings" class="view">
+        <div class="bg-white p-6 rounded-xl border max-w-xl">
+          <label class="block text-sm font-bold mb-1">مفتاح Gemini API</label>
+          <input id="setKey" type="password" class="w-full border rounded p-2 mb-1" autocomplete="off" placeholder="الصقي المفتاح هنا">
+          <p class="text-xs text-gray-500 mb-4">يُحفظ في متصفحك فقط. وإن كان مكتوبًا في الكود (EMBEDDED_KEY) فلا حاجة لإدخاله هنا.</p>
+          <label class="block text-sm font-bold mb-1">اسم النموذج</label>
+          <input id="setModel" name="model_name" autocomplete="off" class="w-full border rounded p-2 mb-4" dir="ltr">
+          <div class="flex flex-wrap gap-2">
+            <button id="saveSettings" class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded">حفظ</button>
+            <button id="testKey" class="bg-gray-100 hover:bg-gray-200 border py-2 px-4 rounded">اختبار الاتصال</button>
+            <button id="clearHist" class="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 py-2 px-4 rounded">مسح السجل</button>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+ </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const DEFAULT_MODEL = 'gemini-flash-latest';
+// ضعي مفتاحك هنا للربط المباشر دون إدخاله في الإعدادات. تحذير: أي شخص يفتح الصفحة سيراه.
+const EMBEDDED_KEY = '';
+const MAIN_CLASSES = ['عموميات','الفلسفة وعلم النفس','الدين','العلوم الاجتماعية','اللغات','العلوم البحتة','العلوم التطبيقية','الفنون والترفيه','الأدب','التاريخ والجغرافيا'];
+
+const getKey = () => store.get('lib_key', '') || EMBEDDED_KEY;
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } }
+};
+let records = store.get('lib_history', []);
+let pdfBase64 = null;
+// عند التشغيل داخل Google Apps Script يُحفظ السجل ويُستدعى الذكاء الاصطناعي من الخادم
+const IN_GAS = typeof google !== 'undefined' && !!google.script && !!google.script.run;
+function persist() {
+  const ok = store.set('lib_history', records);
+  if (IN_GAS) google.script.run.withFailureHandler(() => toast('تعذّر حفظ السجل على Google Drive.')).saveHistory(JSON.stringify(records));
+  else if (!ok) toast('المتصفح يمنع حفظ السجل، سيُفقد عند إغلاق الصفحة.');
+}
+function loadServer() {
+  if (!IN_GAS) return;
+  google.script.run.withSuccessHandler(j => {
+    try { const a = JSON.parse(j || '[]'); if (Array.isArray(a) && (a.length || !records.length)) { records = a; store.set('lib_history', records); } } catch {}
+    renderHistory(); renderStats();
+  }).loadHistory();
+}
+let current = null;
+
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.style.display = 'block';
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', 6000);
+}
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+
+/* ---------- الدخول ---------- */
+// تنبيه: التحقق هنا شكلي (في المتصفح). للحماية الحقيقية يلزم خادم.
+$('loginForm').addEventListener('submit', e => {
+  e.preventDefault();
+  if ($('username').value === 'admin' && $('password').value === '1234') {
+    try { sessionStorage.setItem('lib_auth', '1'); } catch {} enterApp();
+  } else $('loginError').style.display = 'block';
+});
+function enterApp() {
+  $('loginPortal').style.display = 'none'; $('app').style.display = 'block';
+  $('setKey').value = store.get('lib_key', ''); $('setModel').value = store.get('lib_model', DEFAULT_MODEL);
+  showView('process'); loadServer();
+}
+$('logoutBtn').onclick = () => {
+  try { sessionStorage.removeItem('lib_auth'); } catch {} $('app').style.display = 'none'; $('loginPortal').style.display = 'flex';
+  $('loginForm').reset(); $('loginError').style.display = 'none'; $('resultsArea').style.display = 'none';
+};
+
+/* ---------- التنقل ---------- */
+const TITLES = { process: 'معالجة وعاء معلومات جديد', history: 'سجل العمليات السابقة', stats: 'الإحصائيات والتقارير', settings: 'إعدادات النظام' };
+function showView(v) {
+  document.querySelectorAll('.view').forEach(s => s.classList.toggle('show', s.id === 'v-' + v));
+  document.querySelectorAll('.nav').forEach(n => n.classList.toggle('active', n.dataset.view === v));
+  $('viewTitle').textContent = TITLES[v]; $('mobileNav').value = v;
+  if (v === 'history') { $('storeWarn').style.display = (IN_GAS || store.set('lib_probe', 1)) ? 'none' : 'block'; $('histSearch').value = ''; renderHistory(); } if (v === 'stats') renderStats();
+}
+document.querySelectorAll('.nav').forEach(n => n.onclick = () => showView(n.dataset.view));
+$('mobileNav').onchange = e => showView(e.target.value);
+
+/* ---------- رفع PDF ---------- */
+$('dropZone').onclick = () => $('pdfUpload').click();
+$('dropZone').ondragover = e => e.preventDefault();
+$('dropZone').ondrop = e => { e.preventDefault(); readPdf(e.dataTransfer.files[0]); };
+$('pdfUpload').onchange = e => readPdf(e.target.files[0]);
+function readPdf(file) {
+  pdfBase64 = null; $('fileName').style.display = 'none';
+  if (!file) return;
+  if (file.type !== 'application/pdf') return toast('الملف ليس PDF.');
+  if (file.size > 10 * 1024 * 1024) return toast('حجم الملف أكبر من 10 ميجابايت.');
+  const r = new FileReader();
+  r.onload = () => { pdfBase64 = r.result.split(',')[1]; $('fileName').textContent = 'تم إرفاق: ' + file.name; $('fileName').style.display = 'block'; };
+  r.onerror = () => toast('تعذّرت قراءة الملف.');
+  r.readAsDataURL(file);
+}
+
+/* ---------- المعالجة ---------- */
+async function callGemini(parts, key, model) {
+  if (IN_GAS) {
+    try {
+      const out = await new Promise((ok, bad) => google.script.run.withSuccessHandler(ok).withFailureHandler(bad).callGemini(JSON.stringify({ parts, model })));
+      return JSON.parse(out);
+    } catch (e) {
+      const m = /HTTP (\d+)/.exec((e && e.message) || '');
+      if (m) { const er = new Error(e.message); er.status = +m[1]; throw er; }
+      throw e;
+    }
+  }
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+    body: JSON.stringify({ contents: [{ parts }], generationConfig: { responseMimeType: 'application/json', temperature: 0.2 } })
+  });
+  if (!res.ok) { const err = new Error('HTTP ' + res.status); err.status = res.status; throw err; }
+  return res.json();
+}
+function httpMsg(s) {
+  if (s === 400 || s === 403) return 'المفتاح غير صالح أو غير مسموح به. راجعي الإعدادات.';
+  if (s === 404) return 'اسم النموذج غير صحيح. غيّريه من الإعدادات.';
+  if (s === 429) return 'تجاوزتِ حد الاستخدام. انتظري قليلًا ثم أعيدي المحاولة.';
+  return 'تعذّر الطلب (رمز ' + s + ').';
+}
+
+$('processBtn').onclick = async () => {
+  const f = id => $(id).value.trim();
+  const book = { title: f('bookTitle'), author: f('bookAuthor'), publisher: f('bookPublisher'), year: f('bookYear'), pages: f('bookPages'), isbn: f('bookIsbn') };
+  if (!book.title) return toast('الرجاء إدخال عنوان الوعاء.');
+  const key = getKey(), model = store.get('lib_model', DEFAULT_MODEL);
+  if (!key && !IN_GAS) { toast('ضعي مفتاح API في الإعدادات أولًا.'); return showView('settings'); }
+
+  const ops = [...document.querySelectorAll('#ops input:checked')].map(i => i.value);
+  const sch = { dewey: 'رقم ديوي (أرقام ونقطة عشرية فقط)', subjects: ['رأس موضوع'], catalog: 'بطاقة فهرسة وصفية تقليدية تشمل بيانات النشر والوصف المادي' };
+  if (ops.includes('abstract')) { sch.abstract = 'مستخلص من 100 إلى 150 كلمة بلغة الوعاء'; sch.abstract_type = 'إرشادي أو إخباري'; }
+  if (ops.includes('index')) sch.index = [{ term: 'مصطلح كشاف', see_also: ['مصطلح مرتبط'] }];
+  if (ops.includes('authority')) {
+    sch.authority = [{ name_as_given: 'الاسم كما ورد', authorized_form: 'الصيغة المقننة (اللقب، الاسم)', variants: ['صيغ أخرى للاسم'], type: 'شخصي أو هيئة', note: '' }];
+    sch.subject_authority = [{ used: 'الصيغة غير المقننة', preferred: 'الرأس المقنن', broader: [], narrower: [], related: [] }];
+  }
+  const extra = [
+    ops.includes('index') && 'التكشيف: من 8 إلى 15 مدخلًا مرتبة هجائيًا مع إحالات "انظر أيضًا".',
+    ops.includes('authority') && 'الضبط الاستنادي: قنّن أسماء المؤلفين وفق قواعد الفهرسة العربية/RDA، وقنّن رؤوس الموضوعات مع الأعم والأخص والمرتبط. لا تخترع تواريخ ميلاد أو وفاة؛ اتركها فارغة إن لم تتأكد، وبيّن في note أن الصيغة تحتاج تحققًا من ملف استنادي معتمد.'
+  ].filter(Boolean).join('\n');
+  const prompt = `أنت مفهرس ومصنف خبير في مكتبة عامة. نفّذ العمليات الفنية للوعاء التالي:
+العنوان: ${book.title}
+المؤلف: ${book.author || 'غير محدد'}
+الناشر: ${book.publisher || 'غير محدد'}
+سنة النشر: ${book.year || 'غير محددة'}
+عدد الصفحات: ${book.pages || 'غير محدد'}
+ISBN: ${book.isbn || 'غير متوفر'}
+المقدمة: ${f('bookSummary') || 'غير متوفرة'}
+${pdfBase64 ? 'مرفق ملف PDF للوعاء، استخدمه لتحسين التحليل الموضوعي.' : ''}
+لا تخترع بيانات غير مذكورة؛ اكتب "غير محدد" بدلها. أرجع JSON فقط بهذا الهيكل:
+${JSON.stringify(sch)}
+${extra}`;
+  const parts = [{ text: prompt }];
+  if (pdfBase64) parts.push({ inline_data: { mime_type: 'application/pdf', data: pdfBase64 } });
+
+  $('processBtn').disabled = true; $('loading').style.display = 'block'; $('resultsArea').style.display = 'none';
+  try {
+    const data = await callGemini(parts, key, model);
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) return toast('لم يرجع النموذج نتيجة (ربما حُجب الطلب). جرّبي صياغة مختلفة.');
+    const r = JSON.parse(text.replace(/```json/gi, '').replace(/```/g, '').trim());
+    current = {
+      id: Date.now(), date: new Date().toISOString(), title: book.title, author: book.author || 'غير محدد',
+      dewey: String(r.dewey || '').trim(), subjects: Array.isArray(r.subjects) ? r.subjects.map(String) : [], catalog: String(r.catalog || ''),
+      abstract: String(r.abstract || ''), abstractType: String(r.abstract_type || ''),
+      index: Array.isArray(r.index) ? r.index : [], authority: Array.isArray(r.authority) ? r.authority : [],
+      subjectAuthority: Array.isArray(r.subject_authority) ? r.subject_authority : []
+    };
+    records.unshift(current);
+    persist();
+    renderResult(current);
+  } catch (e) {
+    console.error(e);
+    toast(e.status ? httpMsg(e.status) : e instanceof SyntaxError ? 'تعذّرت قراءة رد النموذج. حاولي مرة أخرى.' : 'خطأ في الاتصال. تأكدي من الإنترنت.');
+  } finally { $('processBtn').disabled = false; $('loading').style.display = 'none'; }
+};
+
+function renderResult(r) {
+  $('deweyResult').textContent = r.dewey || 'غير متوفر';
+  const ok = /^\d{3}(\.\d+)?$/.test(r.dewey);
+  $('deweyWarn').style.display = ok ? 'none' : 'block';
+  $('deweyClass').textContent = ok ? 'الفئة الرئيسية: ' + MAIN_CLASSES[+r.dewey[0]] : '';
+  $('catalogResult').textContent = r.catalog || 'غير متوفر';
+  const box = $('subjectsResult'); box.replaceChildren();
+  r.subjects.forEach(s => box.appendChild(el('span', 'bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded border border-blue-200', s)));
+  renderExtras(r);
+  $('resultsArea').style.display = 'block';
+}
+function renderExtras(r) {
+  const show = (id, on) => { $(id).style.display = on ? 'block' : 'none'; };
+  const hasU = (r.authority && r.authority.length) || (r.subjectAuthority && r.subjectAuthority.length);
+  show('cardAbstract', !!r.abstract); show('cardIndex', r.index && r.index.length); show('cardAuthority', hasU);
+  $('abstractResult').textContent = r.abstract || '';
+  $('abstractType').textContent = r.abstractType ? '(' + r.abstractType + ')' : '';
+  const ul = $('indexResult'); ul.replaceChildren();
+  (r.index || []).forEach(x => {
+    const li = el('li', '', x.term || (typeof x === 'string' ? x : ''));
+    if (x.see_also && x.see_also.length) li.appendChild(el('span', 'text-gray-500', ' — انظر أيضًا: ' + [].concat(x.see_also).join('، ')));
+    ul.appendChild(li);
+  });
+  const au = $('authorityResult'); au.replaceChildren();
+  (r.authority || []).forEach(a => {
+    const d = el('div', 'border rounded p-3 bg-gray-50');
+    d.appendChild(el('p', 'font-bold', a.authorized_form || a.name_as_given || ''));
+    d.appendChild(el('p', 'text-gray-600', 'كما ورد: ' + (a.name_as_given || '-') + (a.type ? ' | النوع: ' + a.type : '')));
+    if (a.variants && a.variants.length) d.appendChild(el('p', 'text-gray-600', 'انظر: ' + [].concat(a.variants).join('، ')));
+    if (a.note) d.appendChild(el('p', 'text-xs text-amber-600', a.note));
+    au.appendChild(d);
+  });
+  (r.subjectAuthority || []).forEach(s => {
+    const d = el('div', 'border rounded p-3 bg-blue-50');
+    d.appendChild(el('p', 'font-bold', s.preferred || s.used || ''));
+    [['الصيغة غير المقننة', [s.used]], ['أعم', s.broader], ['أخص', s.narrower], ['مرتبط', s.related]].forEach(([l, v]) => {
+      const w = [].concat(v || []).filter(Boolean); if (w.length) d.appendChild(el('p', 'text-gray-600', l + ': ' + w.join('، ')));
+    });
+    au.appendChild(d);
+  });
+  if (hasU) au.appendChild(el('p', 'text-xs text-gray-400', 'الصيغ المقننة مقترحة آليًا، وتحتاج مطابقة بملف استنادي معتمد (مثل VIAF) قبل الاعتماد.'));
+}
+$('copyBtn').onclick = () => {
+  const c = current || {};
+  const t = [$('catalogResult').innerText, 'DDC: ' + $('deweyResult').innerText, (c.subjects || []).join(' | '),
+    c.abstract ? 'المستخلص: ' + c.abstract : '', (c.index || []).length ? 'الكشاف: ' + c.index.map(x => x.term).join('، ') : '',
+    (c.authority || []).map(a => 'استنادي: ' + (a.authorized_form || '')).join('\n')].filter(Boolean).join('\n');
+  navigator.clipboard.writeText(t).then(() => toast('تم النسخ.')).catch(() => toast('تعذّر النسخ.'));
+};
+$('printBtn').onclick = () => window.print();
+
+/* ---------- السجل ---------- */
+function renderHistory() {
+  const q = $('histSearch').value.trim().toLowerCase();
+  const rows = records.filter(h => !q || (h.title + ' ' + h.author + ' ' + h.dewey).toLowerCase().includes(q));
+  const body = $('histBody'); body.replaceChildren();
+  $('histEmpty').style.display = rows.length ? 'none' : 'block';
+  if (!rows.length) $('histEmpty').textContent = records.length ? 'لا نتائج مطابقة للبحث.' : 'لا توجد عمليات محفوظة بعد. (تُسجَّل العملية بعد نجاح رد الذكاء الاصطناعي فقط.)';
+  rows.forEach(h => {
+    const tr = el('tr', 'border-b hover:bg-gray-50');
+    tr.append(el('td', 'py-2 px-3 font-semibold', h.title), el('td', 'py-2 px-3 font-mono text-blue-700', h.dewey || '-'),
+      el('td', 'py-2 px-3', h.author), el('td', 'py-2 px-3 text-gray-500', new Date(h.date).toLocaleDateString('ar-EG')));
+    const td = el('td', 'py-2 px-3 whitespace-nowrap');
+    const view = el('button', 'text-blue-600 ml-3', 'عرض'); view.onclick = () => { current = h; renderResult(h); showView('process'); };
+    const del = el('button', 'text-red-500', 'حذف');
+    del.onclick = () => { if (confirm('حذف هذا السجل؟')) { records = records.filter(x => x.id !== h.id); persist(); renderHistory(); } };
+    td.append(view, del); tr.appendChild(td); body.appendChild(tr);
+  });
+}
+$('histSearch').oninput = renderHistory;
+$('exportBtn').onclick = () => {
+  if (!records.length) return toast('لا توجد بيانات للتصدير.');
+  const q = v => '"' + String(v).replace(/"/g, '""') + '"';
+  const csv = '\uFEFF' + ['العنوان,المؤلف,DDC,الموضوعات,المستخلص,الكشاف,الصيغة المقننة للمؤلف,التاريخ'].concat(
+    records.map(h => [h.title, h.author, h.dewey, h.subjects.join(' ; '), h.abstract || '', (h.index || []).map(x => x.term).join(' ; '), (h.authority || []).map(a => a.authorized_form).join(' ; '), h.date.slice(0, 10)].map(q).join(','))).join('\n');
+  const a = el('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = 'library-catalog.csv'; a.click(); URL.revokeObjectURL(a.href);
+};
+
+/* ---------- الإحصائيات ---------- */
+function renderStats() {
+  $('stTotal').textContent = records.length;
+  const today = new Date().toDateString();
+  $('stToday').textContent = records.filter(h => new Date(h.date).toDateString() === today).length;
+  const counts = Array(10).fill(0);
+  records.forEach(h => { if (/^\d/.test(h.dewey)) counts[+h.dewey[0]]++; });
+  const max = Math.max(...counts), top = counts.indexOf(max);
+  $('stTop').textContent = max ? MAIN_CLASSES[top] : '-';
+  const box = $('stBars'); box.replaceChildren();
+  counts.forEach((c, i) => {
+    const row = el('div', 'flex items-center gap-3 text-sm');
+    const bar = el('div', 'bg-blue-500 h-4 rounded'); bar.style.width = max ? (c / max * 100) + '%' : '0';
+    const wrap = el('div', 'flex-1 bg-gray-100 rounded h-4'); wrap.appendChild(bar);
+    row.append(el('span', 'w-40 text-gray-600', `${i}00 ${MAIN_CLASSES[i]}`), wrap, el('span', 'w-8 font-bold', c));
+    box.appendChild(row);
+  });
+}
+
+/* ---------- الإعدادات ---------- */
+$('saveSettings').onclick = () => {
+  store.set('lib_key', $('setKey').value.trim()); store.set('lib_model', $('setModel').value.trim() || DEFAULT_MODEL); toast('تم حفظ الإعدادات.');
+};
+$('testKey').onclick = async () => {
+  const key = $('setKey').value.trim() || getKey(), model = $('setModel').value.trim() || DEFAULT_MODEL;
+  if (!key && !IN_GAS) return toast('أدخلي المفتاح أولًا.');
+  try { await callGemini([{ text: 'أرجع JSON: {"ok":true}' }], key, model); toast('الاتصال يعمل ✓'); }
+  catch (e) { toast(e.status ? httpMsg(e.status) : 'خطأ في الاتصال.'); }
+};
+$('clearHist').onclick = () => { if (confirm('مسح كل السجل نهائيًا؟')) { records = []; persist(); toast('تم المسح.'); } };
+
+try { if (sessionStorage.getItem('lib_auth')) enterApp(); } catch {}
+</script>
+</body>
+</html>
